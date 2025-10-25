@@ -78,6 +78,9 @@ def update(frame):
     
     elapsed = time.time() - start_time
     elapsed = min(elapsed, total_seconds)
+    if elapsed >= total_seconds:
+        ani.event_source.stop()  # stop the animation
+        elapsed = total_seconds
     
     # Map elapsed to current frame
     current_frame = int(elapsed / total_seconds * num_frames)
