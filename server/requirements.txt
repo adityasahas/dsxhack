@@ -8,3 +8,5 @@ openai
 requests
 pydantic
 pydantic-settings
+matplotlib
+numpy
