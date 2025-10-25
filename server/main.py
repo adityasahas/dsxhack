@@ -34,7 +34,17 @@ async def process_audio_stream(audio_url: str):
         
         p = Process(audio_url)
         
-        yield json.dumps({"status": "loading_audio", "progress": 10}) + "\n"
+        yield json.dumps({"status": "loading_audio", "progress": 5}) + "\n"
+        await asyncio.sleep(0.1)
+        
+        # Load audio and calculate full waveform upfront
+        waveform_data = p.load_and_calculate_waveform()
+        
+        yield json.dumps({
+            "status": "waveform_ready",
+            "progress": 10,
+            "waveform": waveform_data
+        }) + "\n"
         await asyncio.sleep(0.1)
         
         for chunk_result in p.process_waveform():

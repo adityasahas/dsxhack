@@ -36,10 +36,11 @@ class Process:
         self.key = None
         self.tempo = None
         self.emotions = []
-
-    def process_waveform(self):   
-        """Generator that yields chunk results as they're processed"""
-        try: 
+        self.waveform_data = []
+    
+    def load_and_calculate_waveform(self):
+        """Load audio and calculate full waveform visualization data"""
+        try:
             print(f"[Process] Downloading audio from: {self.url}")
             response = requests.get(self.url)
             response.raise_for_status()
@@ -47,9 +48,22 @@ class Process:
             print(f"[Process] Audio downloaded successfully ({len(response.content)} bytes)")
 
             print("[Process] Loading audio file with librosa...")
-            self.wave, self.sr = librosa.load(audio_data, sr = None)
+            self.wave, self.sr = librosa.load(audio_data, sr=None)
             print(f"[Process] Audio loaded: {len(self.wave)} samples at {self.sr} Hz")
             
+            # Calculate waveform data for visualization
+            print("[Process] Calculating waveform data for visualization...")
+            self.waveform_data = self.calculate_waveform_data()
+            print(f"[Process] Calculated {len(self.waveform_data)} waveform frames")
+            
+            return self.waveform_data
+        except Exception as e:
+            print(f"[Process] ERROR loading waveform: {str(e)}")
+            return []
+
+    def process_waveform(self):   
+        """Generator that yields chunk results as they're processed"""
+        try: 
             samples_per_chunk, hop_samples = self.chunk()
             
             total_chunks = (len(self.wave) - samples_per_chunk) // hop_samples
@@ -113,6 +127,77 @@ class Process:
             print(f"[Process] ERROR: {str(e)}")
             yield {"error": f"Could not load file: {str(e)}"}
     #def get 
+    def calculate_waveform_data(self):
+        """Calculate frame-level RMS and emotion colors for visualization (Brady's logic)"""
+        # Use Brady's parameters
+        hop_length = 1024
+        frame_length = 2048
+        
+        # RMS (energy/arousal)
+        rms = librosa.feature.rms(y=self.wave, frame_length=frame_length, hop_length=hop_length)[0]
+        rms_norm = (rms - rms.min()) / (rms.max() - rms.min())
+        
+        # Spectral centroid (brightness/valence)
+        spec_centroid = librosa.feature.spectral_centroid(y=self.wave, sr=self.sr, hop_length=hop_length)[0]
+        centroid_norm = (spec_centroid - spec_centroid.min()) / (spec_centroid.max() - spec_centroid.min())
+        
+        # Calculate times for each frame
+        total_seconds = len(self.wave) / self.sr
+        rms_times = np.linspace(0, total_seconds, len(rms))
+        
+        # Map frames to emotion colors
+        colors_raw = np.array([self.emotion_to_color(a, v) for a, v in zip(rms_norm, centroid_norm)])
+        
+        # Apply block_size for discrete sections (Brady's approach)
+        block_size = 30
+        num_frames = len(colors_raw)
+        colors = np.zeros_like(colors_raw)
+        
+        for i in range(num_frames):
+            block_index = i // block_size
+            start_idx = block_index * block_size
+            colors[i] = colors_raw[start_idx]
+        
+        # Build waveform frames (downsample to reduce JSON size)
+        # Take every 3rd frame for high detail (buffering handles large payloads)
+        downsample_factor = 3
+        waveform_frames = []
+        for i in range(0, num_frames, downsample_factor):
+            # Convert RGB (0-1) to hex
+            rgb = (colors[i] * 255).astype(int)
+            hex_color = f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
+            
+            waveform_frames.append({
+                "time": float(rms_times[i]),
+                "amplitude": float(rms[i]),
+                "color": hex_color
+            })
+        
+        print(f"[Waveform] Downsampled from {num_frames} to {len(waveform_frames)} frames")
+        return waveform_frames
+    
+    def brighten_color(self, color, factor):
+        """Brighten an RGB color array (values 0-1). Factor >1 increases brightness."""
+        brightened = color * factor
+        return np.clip(brightened, 0, 1)
+    
+    def emotion_to_color(self, loudness, brightness):
+        """Map arousal (energy) and valence (brightness) to an RGB color (Brady's logic)"""
+        happy = np.array([255, 230, 0])      # bright yellow
+        sad = np.array([0, 0, 200])          # bright blue
+        calm = np.array([0, 255, 150])       # bright teal
+        angry = np.array([255, 0, 0])        # bright red
+        
+        color = (
+            brightness * (loudness * happy + (1 - loudness) * calm) +
+            (1 - brightness) * (loudness * angry + (1 - loudness) * sad)
+        )
+        
+        # Apply brightening (fixing Brady's bug where result wasn't used)
+        color = self.brighten_color(color / 255, factor=2)
+        
+        return color  # Returns normalized RGB (0-1)
+    
     def chunk(self):
         chunk_duration = 7.0
         hop_duration = 6.0          # overlap for smoother updates

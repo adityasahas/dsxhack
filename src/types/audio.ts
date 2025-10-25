@@ -11,51 +11,34 @@ export interface EmotionData {
   reasoning: string;
 }
 
+export interface WaveformFrame {
+  time: number;
+  amplitude: number;
+  color: string;
+}
+
 export interface ChunkData {
   energy: number;
   tempo: number;
   key: string;
   emotion: EmotionData;
-  image_url: string;
-  audio_url: string;
-}
-
-export interface StreamResponseBase {
-  status: string;
-  progress: number;
-}
-
-export interface StreamResponseStarting extends StreamResponseBase {
-  status: "starting";
-}
-
-export interface StreamResponseLoading extends StreamResponseBase {
-  status: "loading_audio";
-}
-
-export interface StreamResponseProcessingChunk extends StreamResponseBase {
-  status: "processing_chunk";
-  chunk_number: number;
-  total_chunks: number;
-  data: ChunkData;
-}
-
-export interface StreamResponseComplete extends StreamResponseBase {
-  status: "complete";
-  progress: 100;
-}
-
-export interface StreamResponseError {
-  status: "error";
-  message: string;
+  image_url: string | null;
+  audio_url?: string;
 }
 
 export type StreamResponse =
-  | StreamResponseStarting
-  | StreamResponseLoading
-  | StreamResponseProcessingChunk
-  | StreamResponseComplete
-  | StreamResponseError;
+  | { status: "starting"; progress: number }
+  | { status: "loading_audio"; progress: number }
+  | { status: "waveform_ready"; progress: number; waveform: WaveformFrame[] }
+  | {
+      status: "processing_chunk";
+      progress: number;
+      chunk_number: number;
+      total_chunks: number;
+      data: ChunkData;
+    }
+  | { status: "complete"; progress: number }
+  | { status: "error"; message: string };
 
 export interface AudioProcessRequest {
   audio_url: string;
