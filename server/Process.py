@@ -2,6 +2,7 @@ import librosa
 import numpy as np
 import requests
 import io
+import time
 from config import settings
 from openai import OpenAI
 from pydantic import BaseModel, Field
@@ -39,29 +40,49 @@ class Process:
     def process_waveform(self):   
         """Generator that yields chunk results as they're processed"""
         try: 
+            print(f"[Process] Downloading audio from: {self.url}")
             response = requests.get(self.url)
             response.raise_for_status()
             audio_data = io.BytesIO(response.content)
+            print(f"[Process] Audio downloaded successfully ({len(response.content)} bytes)")
 
+            print("[Process] Loading audio file with librosa...")
             self.wave, self.sr = librosa.load(audio_data, sr = None)
+            print(f"[Process] Audio loaded: {len(self.wave)} samples at {self.sr} Hz")
+            
             samples_per_chunk, hop_samples = self.chunk()
             
             total_chunks = (len(self.wave) - samples_per_chunk) // hop_samples
             chunk_number = 0
+            print(f"[Process] Starting to process {total_chunks} chunks...")
             
             for start in range(0, len(self.wave) - samples_per_chunk, hop_samples):
                 end = start + samples_per_chunk
                 chunk = self.wave[start:end]
                 self.chunk1 = chunk
                 
-                self.energy = self.get_chunk_energy()
-                self.tempo = self.get_chunk_tempo()
-                self.key = self.get_chunk_major_minor()
+                print(f"\n[Chunk {chunk_number + 1}/{total_chunks}] Processing...")
                 
+                print(f"[Chunk {chunk_number + 1}] Calculating energy...")
+                self.energy = self.get_chunk_energy()
+                print(f"[Chunk {chunk_number + 1}] Energy: {self.energy:.4f}")
+                
+                print(f"[Chunk {chunk_number + 1}] Calculating tempo...")
+                self.tempo = self.get_chunk_tempo()
+                print(f"[Chunk {chunk_number + 1}] Tempo: {self.tempo:.1f} BPM")
+                
+                print(f"[Chunk {chunk_number + 1}] Detecting key...")
+                self.key = self.get_chunk_major_minor()
+                print(f"[Chunk {chunk_number + 1}] Key: {self.key}")
+                
+                print(f"[Chunk {chunk_number + 1}] Calculating emotions with GPT...")
                 emotional_output = self.calculate_emotion()
                 self.emotions.append(emotional_output)
+                print(f"[Chunk {chunk_number + 1}] Emotions calculated")
                 
+                print(f"[Chunk {chunk_number + 1}] Generating image with DALL-E...")
                 image_url = self.generate_emotion_image()
+                print(f"[Chunk {chunk_number + 1}] Image generated: {len(image_url) if image_url else 0} chars")
                 
                 chunk_number += 1
                 
@@ -86,7 +107,10 @@ class Process:
                     "image_url": image_url
                 }
                 
+            print(f"\n[Process] All {total_chunks} chunks processed successfully!")
+                
         except Exception as e:
+            print(f"[Process] ERROR: {str(e)}")
             yield {"error": f"Could not load file: {str(e)}"}
     #def get 
     def chunk(self):
@@ -174,25 +198,29 @@ class Process:
     3. Return your response as a structured JSON with fields: happy, sad, calm, energetic, excited, relaxed, angry, romantic, other (all as floats), and reasoning (as a string)."""
 
         # Use OpenAI SDK with structured output
-        completion = self.client.beta.chat.completions.parse(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a music emotion analysis expert."},
-                {"role": "user", "content": prompt}
-            ],
-            response_format=EmotionOutput
-        )
-        
-        result = completion.choices[0].message.parsed
-        return result
+        try:
+            completion = self.client.beta.chat.completions.parse(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a music emotion analysis expert."},
+                    {"role": "user", "content": prompt}
+                ],
+                response_format=EmotionOutput
+            )
+            
+            result = completion.choices[0].message.parsed
+            return result
+        except Exception as e:
+            print(f"[Emotion] Error calculating emotion: {e}")
+            raise
     
     def generate_emotion_image(self, output_path: str = "emotion_visualization.png"):
         """
         Generate an image visualization based on the current chunk's emotion.
-        Uses DALL-E to create an artistic representation.
+        Uses Luma Photon Flash to create an artistic representation.
         """
         if not self.energy or not self.tempo or not self.key:
-            print("No chunk data calculated yet.")
+            print("[Image] No chunk data calculated yet.")
             return None
         
         # Use current chunk's emotion data
@@ -219,32 +247,66 @@ class Process:
         sorted_emotions = sorted(current_emotion.items(), key=lambda x: x[1], reverse=True)
         dominant_emotions = [f"{e[0].capitalize()} ({e[1]:.1f}%)" for e in sorted_emotions[:3]]
         
-        # Create a prompt for DALL-E
+        # Create a prompt for Luma Photon
         emotions_str = ", ".join(dominant_emotions)
         
-        dalle_prompt = f"""Create an abstract artistic visualization representing this musical moment. 
-The dominant emotions are: {emotions_str}. 
-Tempo: {self.tempo} BPM, Key: {self.key}, Energy: {self.energy:.4f}.
-Use flowing colors, shapes, and patterns that evoke these feelings. 
-Style: abstract, emotional, musical, flowing, vibrant."""
+        prompt = f"""Abstract artistic visualization of music emotions: {emotions_str}. 
+Tempo {self.tempo} BPM, {self.key} key, energy level {self.energy:.2f}.
+Flowing colors, shapes, and patterns evoking these feelings. 
+Abstract, emotional, flowing, vibrant style.
+No music notes, instruments, or musical symbols."""
         
         try:
-            # Generate image using DALL-E
-            response = self.client.images.generate(
-                model="dall-e-3",
-                prompt=dalle_prompt,
-                size="1024x1024",
-                quality="standard",
-                n=1,
+            print("[Image] Creating prediction with Luma Photon Flash...")
+            
+            # Create prediction
+            response = requests.post(
+                "https://api.replicate.com/v1/models/luma/photon-flash/predictions",
+                headers={
+                    "Authorization": f"Token {settings.REPLICATE_API_TOKEN}",
+                    "Content-Type": "application/json",
+                    "Prefer": "wait"
+                },
+                json={
+                    "input": {
+                        "prompt": prompt,
+                        "aspect_ratio": "1:1"
+                    }
+                }
             )
+            response.raise_for_status()
+            prediction = response.json()
+            prediction_id = prediction["id"]
             
-            image_url = response.data[0].url
-        
+            print(f"[Image] Prediction created: {prediction_id}")
             
-            return image_url
+            # Poll for completion
+            max_attempts = 60
+            for attempt in range(max_attempts):
+                time.sleep(2)
+                
+                status_response = requests.get(
+                    f"https://api.replicate.com/v1/predictions/{prediction_id}",
+                    headers={"Authorization": f"Token {settings.REPLICATE_API_TOKEN}"}
+                )
+                status_response.raise_for_status()
+                status = status_response.json()
+                
+                if status["status"] == "succeeded":
+                    image_url = status["output"]
+                    print(f"[Image] Successfully generated image: {image_url}")
+                    return image_url
+                elif status["status"] == "failed":
+                    print(f"[Image] Generation failed: {status.get('error')}")
+                    return None
+                
+                print(f"[Image] Status: {status['status']}, attempt {attempt + 1}/{max_attempts}")
+            
+            print("[Image] Timeout waiting for image generation")
+            return None
             
         except Exception as e:
-            print(f"Error generating image: {e}")
+            print(f"[Image] Error generating image: {e}")
             return None
     
 if __name__ == "__main__":
