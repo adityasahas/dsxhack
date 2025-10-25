@@ -2,8 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import type { StreamResponse, ChunkData } from "@/types/audio";
 
@@ -13,8 +12,10 @@ export default function AudioVisualizer() {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState("");
   const [currentChunk, setCurrentChunk] = useState<ChunkData | null>(null);
+  const [previousChunk, setPreviousChunk] = useState<ChunkData | null>(null);
   const [chunkInfo, setChunkInfo] = useState({ current: 0, total: 0 });
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [imageKey, setImageKey] = useState(0);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -85,10 +86,12 @@ export default function AudioVisualizer() {
               setStatus("Starting...");
             } else if (data.status === "loading_audio") {
               setStatus("Loading audio...");
-            } else if (data.status === "processing_chunk") {
-              setStatus("Processing...");
-              setCurrentChunk(data.data);
-              setChunkInfo({ current: data.chunk_number, total: data.total_chunks });
+              } else if (data.status === "processing_chunk") {
+                setStatus("Processing...");
+                setPreviousChunk(currentChunk);
+                setCurrentChunk(data.data);
+                setChunkInfo({ current: data.chunk_number, total: data.total_chunks });
+                setImageKey((prev) => prev + 1);
             } else if (data.status === "complete") {
               setStatus("Complete!");
               toast.success("Audio processed successfully!");
@@ -107,110 +110,110 @@ export default function AudioVisualizer() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-lg border border-solid border-black/[.08] bg-card p-6 dark:border-white/[.145]">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="audio-file" className="text-sm font-medium">
-              Audio File
-            </Label>
-            <Input
-              id="audio-file"
-              type="file"
-              accept="audio/*"
-              onChange={handleFileChange}
-              disabled={isProcessing}
-              className="cursor-pointer file:cursor-pointer"
-            />
+    <div className="space-y-3">
+      <div className="rounded-lg border border-solid border-black/[.08] bg-card p-3 dark:border-white/[.145]">
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <Input
+                id="audio-file"
+                type="file"
+                accept="audio/*"
+                onChange={handleFileChange}
+                disabled={isProcessing}
+                className="h-8 cursor-pointer text-xs file:cursor-pointer"
+              />
+            </div>
+            <Button type="submit" disabled={!audioFile || isProcessing} size="sm" className="shrink-0">
+              {isProcessing ? "Processing..." : "Visualize"}
+            </Button>
           </div>
-
-          {audioFile && !isProcessing && (
-            <div className="rounded-md bg-black/[.05] p-4 dark:bg-white/[.06]">
-              <p className="text-sm font-semibold">Selected File</p>
-              <p className="mt-1 text-sm text-muted-foreground">{audioFile.name}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {(audioFile.size / 1024 / 1024).toFixed(2)} MB
-              </p>
-            </div>
-          )}
-
-          {isProcessing && (
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">{status}</span>
-                  <span className="font-medium">{progress}%</span>
-                </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-black/[.05] dark:bg-white/[.06]">
-                  <div
-                    className="h-full bg-primary transition-all duration-300 ease-out"
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-              </div>
-
-              {chunkInfo.total > 0 && (
-                <p className="text-center text-xs text-muted-foreground">
-                  Chunk {chunkInfo.current} of {chunkInfo.total}
-                </p>
-              )}
-            </div>
-          )}
-
-          <Button type="submit" disabled={!audioFile || isProcessing} className="w-full">
-            {isProcessing ? "Processing..." : "Visualize"}
-          </Button>
         </form>
       </div>
 
-      {currentChunk && (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          {currentChunk.image_url && (
-            <div className="overflow-hidden rounded-lg border border-solid border-black/[.08] bg-card dark:border-white/[.145]">
-              <img
-                src={currentChunk.image_url}
-                alt="Emotion visualization"
-                className="h-auto w-full animate-in fade-in zoom-in-95 duration-700"
+      {isProcessing && (
+        <div className="rounded-lg border border-solid border-black/[.08] bg-card p-3 dark:border-white/[.145]">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">{status}</span>
+              <span className="font-medium tabular-nums">{progress}%</span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/[.05] dark:bg-white/[.06]">
+              <div
+                className="h-full bg-primary transition-all duration-300 ease-out"
+                style={{ width: `${progress}%` }}
               />
             </div>
-          )}
-
-          <div className="grid gap-4 sm:grid-cols-3">
-            <MetricCard label="Tempo" value={currentChunk.tempo} unit="BPM" />
-            <MetricCard label="Energy" value={currentChunk.energy} decimals={4} />
-            <MetricCard label="Key" value={currentChunk.key} />
+            {chunkInfo.total > 0 && (
+              <p className="text-center text-xs text-muted-foreground">
+                Chunk {chunkInfo.current} of {chunkInfo.total}
+              </p>
+            )}
           </div>
+        </div>
+      )}
 
-          <div className="rounded-lg border border-solid border-black/[.08] bg-card p-6 dark:border-white/[.145]">
-            <h3 className="mb-4 text-sm font-semibold">Emotion Analysis</h3>
-            <div className="space-y-3">
-              {Object.entries(currentChunk.emotion)
-                .filter(([key]) => key !== "reasoning")
-                .map(([emotion, value]) => (
-                  <EmotionBar
-                    key={emotion}
-                    emotion={emotion}
-                    value={value as number}
-                  />
-                ))}
-            </div>
-            {currentChunk.emotion.reasoning && (
-              <div className="mt-4 rounded-md bg-black/[.05] p-3 dark:bg-white/[.06]">
-                <p className="text-xs text-muted-foreground">
-                  {currentChunk.emotion.reasoning}
-                </p>
+      {(currentChunk || previousChunk) && (
+        <div className="grid gap-4 lg:grid-cols-[400px_1fr]">
+          <div className="space-y-3">
+            {(currentChunk?.image_url || previousChunk?.image_url) && (
+              <div className="relative overflow-hidden rounded-lg border border-solid border-black/[.08] bg-card dark:border-white/[.145]">
+                <img
+                  key={imageKey}
+                  src={currentChunk?.image_url || previousChunk?.image_url}
+                  alt="Emotion visualization"
+                  className="aspect-square w-full object-cover animate-in fade-in zoom-in-95 duration-700"
+                />
+              </div>
+            )}
+
+            {audioUrl && (
+              <div className="rounded-lg border border-solid border-black/[.08] bg-card p-3 dark:border-white/[.145]">
+                <audio controls className="w-full">
+                  <source src={audioUrl} type="audio/mpeg" />
+                  Your browser does not support the audio element.
+                </audio>
               </div>
             )}
           </div>
 
-          {audioUrl && (
-            <div className="rounded-lg border border-solid border-black/[.08] bg-card p-4 dark:border-white/[.145]">
-              <audio controls className="w-full">
-                <source src={audioUrl} type="audio/mpeg" />
-                Your browser does not support the audio element.
-              </audio>
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-3">
+              <MetricCard label="Tempo" value={currentChunk?.tempo || previousChunk?.tempo || 0} unit="BPM" decimals={0} />
+              <MetricCard label="Energy" value={currentChunk?.energy || previousChunk?.energy || 0} decimals={3} />
+              <MetricCard label="Key" value={currentChunk?.key || previousChunk?.key || "-"} />
             </div>
-          )}
+
+            <div className="rounded-lg border border-solid border-black/[.08] bg-card p-4 dark:border-white/[.145]">
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Emotion Analysis
+              </h3>
+              <div className="space-y-2.5">
+                {Object.entries(currentChunk?.emotion || previousChunk?.emotion || {})
+                  .filter(([key]) => key !== "reasoning")
+                  .sort(([, a], [, b]) => (b as number) - (a as number))
+                  .map(([emotion, value], index) => (
+                    <div
+                      key={emotion}
+                      className="animate-in slide-in-from-right-2 fade-in"
+                      style={{
+                        animationDelay: `${index * 50}ms`,
+                        animationDuration: "400ms",
+                      }}
+                    >
+                      <EmotionBar emotion={emotion} value={value as number} />
+                    </div>
+                  ))}
+              </div>
+              {(currentChunk?.emotion.reasoning || previousChunk?.emotion.reasoning) && (
+                <div className="mt-3 rounded-md bg-black/[.05] p-2.5 dark:bg-white/[.06] animate-in fade-in duration-500">
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {currentChunk?.emotion.reasoning || previousChunk?.emotion.reasoning}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -229,13 +232,12 @@ function MetricCard({
   decimals?: number;
 }) {
   const [displayValue, setDisplayValue] = useState(0);
-  const numValue = typeof value === "number" ? value : 0;
 
   useEffect(() => {
     if (typeof value === "number") {
       let start = 0;
       const end = value;
-      const duration = 1000;
+      const duration = 800;
       const increment = end / (duration / 16);
 
       const timer = setInterval(() => {
@@ -253,13 +255,11 @@ function MetricCard({
   }, [value]);
 
   return (
-    <div className="rounded-lg border border-solid border-black/[.08] bg-card p-4 dark:border-white/[.145]">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-2 text-2xl font-semibold tabular-nums">
-        {typeof value === "string"
-          ? value
-          : displayValue.toFixed(decimals)}
-        {unit && <span className="ml-1 text-sm text-muted-foreground">{unit}</span>}
+    <div className="rounded-lg border border-solid border-black/[.08] bg-card p-3 dark:border-white/[.145]">
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-1 text-xl font-semibold tabular-nums">
+        {typeof value === "string" ? value : displayValue.toFixed(decimals)}
+        {unit && <span className="ml-1 text-xs font-normal text-muted-foreground">{unit}</span>}
       </p>
     </div>
   );
@@ -269,19 +269,19 @@ function EmotionBar({ emotion, value }: { emotion: string; value: number }) {
   const [width, setWidth] = useState(0);
 
   useEffect(() => {
-    const timer = setTimeout(() => setWidth(value), 100);
+    const timer = setTimeout(() => setWidth(value), 50);
     return () => clearTimeout(timer);
   }, [value]);
 
   return (
     <div className="space-y-1">
-      <div className="flex items-center justify-between text-sm">
-        <span className="capitalize text-muted-foreground">{emotion}</span>
-        <span className="font-medium tabular-nums">{value.toFixed(1)}%</span>
+      <div className="flex items-center justify-between text-xs">
+        <span className="capitalize">{emotion}</span>
+        <span className="font-medium tabular-nums text-muted-foreground">{value.toFixed(0)}%</span>
       </div>
-      <div className="h-2 w-full overflow-hidden rounded-full bg-black/[.05] dark:bg-white/[.06]">
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/[.05] dark:bg-white/[.06]">
         <div
-          className="h-full bg-primary transition-all duration-1000 ease-out"
+          className="h-full bg-primary transition-all duration-700 ease-out"
           style={{ width: `${width}%` }}
         />
       </div>

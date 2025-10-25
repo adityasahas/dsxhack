@@ -90,8 +90,8 @@ class Process:
             yield {"error": f"Could not load file: {str(e)}"}
     #def get 
     def chunk(self):
-        chunk_duration = 2.0
-        hop_duration = 1.0          # overlap for smoother updates
+        chunk_duration = 7.0
+        hop_duration = 6.0          # overlap for smoother updates
         samples_per_chunk = int(chunk_duration * self.sr)
         hop_samples = int(hop_duration * self.sr)
 
