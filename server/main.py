@@ -13,9 +13,11 @@ from Process import Process
 
 app = FastAPI(title="Audio Visualizer API")
 
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -96,7 +98,12 @@ async def process_audio(request: AudioProcessRequest):
         
         return StreamingResponse(
             process_audio_stream(request.audio_url),
-            media_type="application/x-ndjson"  # Newline-delimited JSON
+            media_type="application/x-ndjson",  # Newline-delimited JSON
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",  # Disable nginx buffering
+                "Connection": "keep-alive",
+            }
         )
     
     except HTTPException as he:

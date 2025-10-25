@@ -166,8 +166,9 @@ export default function AudioVisualizer() {
 
       const { audioUrl } = await uploadResponse.json();
 
+      const PYTHON_API_URL = process.env.NEXT_PUBLIC_PYTHON_API_URL || "http://localhost:8000";
       const processResponse = await fetch(
-        "http://localhost:8000/api/process-audio",
+        `${PYTHON_API_URL}/api/process-audio`,
         {
           method: "POST",
           headers: {
