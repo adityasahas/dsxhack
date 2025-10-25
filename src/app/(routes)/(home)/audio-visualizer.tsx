@@ -7,15 +7,13 @@ import { toast } from "sonner";
 import { X } from "lucide-react";
 import type { StreamResponse, ChunkData, WaveformFrame } from "@/types/audio";
 import WaveformGraph from "./waveform-graph";
+import NextImage from "next/image";
 
 export default function AudioVisualizer() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [status, setStatus] = useState("");
   const [currentChunk, setCurrentChunk] = useState<ChunkData | null>(null);
   const [displayChunk, setDisplayChunk] = useState<ChunkData | null>(null);
-  const [chunkInfo, setChunkInfo] = useState({ current: 0, total: 0 });
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [imageKey, setImageKey] = useState(0);
   const [allWaveform, setAllWaveform] = useState<WaveformFrame[]>([]);
@@ -132,8 +130,6 @@ export default function AudioVisualizer() {
       abortControllerRef.current = null;
     }
     setIsProcessing(false);
-    setProgress(0);
-    setStatus("");
     toast.info("Processing cancelled");
   };
 
@@ -143,7 +139,6 @@ export default function AudioVisualizer() {
 
     abortControllerRef.current = new AbortController();
     setIsProcessing(true);
-    setProgress(0);
     setCurrentChunk(null);
     setDisplayChunk(null);
     setAllWaveform([]);
@@ -213,14 +208,7 @@ export default function AudioVisualizer() {
               throw new Error(data.message);
             }
 
-            setProgress(data.progress);
-
-            if (data.status === "starting") {
-              setStatus("Starting...");
-            } else if (data.status === "loading_audio") {
-              setStatus("Loading audio...");
-            } else if (data.status === "waveform_ready") {
-              setStatus("Waveform calculated...");
+            if (data.status === "waveform_ready") {
               console.log(
                 "Waveform data received:",
                 data.waveform.length,
@@ -228,15 +216,9 @@ export default function AudioVisualizer() {
               );
               setAllWaveform(data.waveform);
             } else if (data.status === "processing_chunk") {
-              setStatus("Processing...");
               console.log("Received chunk data:", data.data);
               setCurrentChunk(data.data);
-              setChunkInfo({
-                current: data.chunk_number,
-                total: data.total_chunks,
-              });
             } else if (data.status === "complete") {
-              setStatus("Complete!");
               toast.success("Audio processed successfully!");
             }
           } catch (err) {
@@ -249,8 +231,8 @@ export default function AudioVisualizer() {
           }
         }
       }
-    } catch (error: any) {
-      if (error.name === "AbortError") {
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
         return;
       }
       toast.error("Failed to process audio");
@@ -334,11 +316,14 @@ export default function AudioVisualizer() {
               <div className="space-y-3">
                 {displayChunk.image_url && (
                   <div className="bg-card relative overflow-hidden rounded-lg border border-solid border-black/[.08] dark:border-white/[.145]">
-                    <img
+                    <NextImage
                       key={imageKey}
                       src={displayChunk.image_url}
                       alt="Emotion visualization"
+                      width={400}
+                      height={400}
                       className="animate-in fade-in zoom-in-95 aspect-square w-full object-cover duration-700"
+                      unoptimized
                     />
                   </div>
                 )}
