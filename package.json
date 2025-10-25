@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "concurrently \"bun run dev:next\" \"bun run dev:python\"",
     "dev:next": "next dev --turbopack",
-    "dev:python": "cd server && venv/bin/python main.py",
+    "dev:python": "node server/start.js",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
