@@ -21,7 +21,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-ALLOWED_DOMAIN = "dsx.adi.gg"
+ALLOWED_DOMAIN = "dsxcdn.adi.gg"
 
 class AudioProcessRequest(BaseModel):
     audio_url: str
