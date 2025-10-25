@@ -10,22 +10,28 @@ export default async function Home() {
   const me = await getMe();
 
   return (
-    <div className="grid min-h-screen grid-rows-[20px_1fr_20px] items-center justify-items-center gap-8 p-8 pb-20 font-[family-name:var(--font-geist-sans)] sm:p-20">
+    <div className="flex min-h-screen flex-col font-[family-name:var(--font-geist-sans)]">
       {me ? (
-        <main className="row-start-2 flex w-full max-w-5xl flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold">Audio Visualizer</h1>
-              <p className="text-xs text-muted-foreground">Welcome back, {me.name}</p>
+        <>
+          <main className="flex w-full flex-1 flex-col items-center gap-4 p-8 pb-20 pt-[140px] sm:p-20 sm:pt-[140px]">
+            <div className="flex w-full max-w-5xl items-center justify-between">
+              <div>
+                <h1 className="text-4xl font-semibold">Deaftones</h1>
+                <p className=" text-muted-foreground">Welcome back, {me.name}</p>
+              </div>
+              <SignOutButton />
             </div>
-            <SignOutButton />
-          </div>
-          <AudioVisualizer />
-          <GenerationsList />
-        </main>
+            <div className="w-full max-w-5xl">
+              <AudioVisualizer />
+            </div>
+            <div className="w-full max-w-5xl">
+              <GenerationsList />
+            </div>
+          </main>
+        </>
       ) : (
-        <main className="row-start-2 flex flex-col items-center gap-8">
-          <h1 className="text-4xl font-semibold">Audio Visualizer</h1>
+        <main className="flex flex-1 flex-col items-center justify-center gap-8">
+          <h1 className="text-4xl font-semibold">Deaftones</h1>
           <p className="text-center text-muted-foreground">
             Sign in to upload and visualize your audio files
           </p>

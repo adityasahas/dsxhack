@@ -14,10 +14,13 @@ export default function WaveformGraph({ waveform, currentTime, duration }: Wavef
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 120 });
   const currentTimeRef = useRef(currentTime);
+  const lastUpdateTimeRef = useRef(Date.now());
+  const smoothTimeRef = useRef(currentTime);
 
-  // Keep currentTime in a ref so animation loop can access latest value
+  // Keep currentTime in a ref and smoothly interpolate
   useEffect(() => {
     currentTimeRef.current = currentTime;
+    lastUpdateTimeRef.current = Date.now();
   }, [currentTime]);
 
   useEffect(() => {
@@ -67,8 +70,22 @@ export default function WaveformGraph({ waveform, currentTime, duration }: Wavef
       // Clear canvas
       ctx.clearRect(0, 0, width, height);
 
-      // Use ref to get latest currentTime value
-      const now = currentTimeRef.current;
+      // Smooth time interpolation - increment smoothly between updates
+      const currentNow = Date.now();
+      const deltaTime = (currentNow - lastUpdateTimeRef.current) / 1000;
+      const targetTime = currentTimeRef.current;
+      
+      // Smoothly interpolate towards target time
+      if (Math.abs(targetTime - smoothTimeRef.current) < 0.5) {
+        // If close, interpolate smoothly
+        smoothTimeRef.current += deltaTime;
+      } else {
+        // If far off, snap to target (e.g., after seek)
+        smoothTimeRef.current = targetTime;
+      }
+      
+      lastUpdateTimeRef.current = currentNow;
+      const now = smoothTimeRef.current;
       
       // Debug logging every 60 frames (~1 second)
       if (Math.random() < 0.016) {
@@ -96,16 +113,70 @@ export default function WaveformGraph({ waveform, currentTime, duration }: Wavef
       // Find max amplitude for scaling
       const maxAmplitude = Math.max(...visibleFrames.map((f) => f.amplitude));
 
-      // Draw waveform
-      visibleFrames.forEach((frame) => {
-        const x = ((frame.time - startTime) / windowSize) * width;
-        const normalizedAmp = frame.amplitude / (maxAmplitude || 1);
-        const barHeight = normalizedAmp * (height * 0.8);
-        const y = height / 2;
-
-        ctx.fillStyle = frame.color;
-        ctx.fillRect(x, y - barHeight / 2, 3, barHeight);
-      });
+      // Draw waveform with smooth interpolation
+      if (visibleFrames.length > 1) {
+        // Draw filled area under the waveform
+        ctx.beginPath();
+        
+        // Create smooth path through all visible frames
+        for (let i = 0; i < visibleFrames.length; i++) {
+          const frame = visibleFrames[i];
+          const x = ((frame.time - startTime) / windowSize) * width;
+          const normalizedAmp = frame.amplitude / (maxAmplitude || 1);
+          const barHeight = normalizedAmp * (height * 0.8);
+          const y = height / 2 - barHeight / 2;
+          
+          if (i === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            // Use quadratic curves for smooth interpolation
+            const prevFrame = visibleFrames[i - 1];
+            const prevX = ((prevFrame.time - startTime) / windowSize) * width;
+            const prevNormalizedAmp = prevFrame.amplitude / (maxAmplitude || 1);
+            const prevBarHeight = prevNormalizedAmp * (height * 0.8);
+            const prevY = height / 2 - prevBarHeight / 2;
+            
+            const cpX = (prevX + x) / 2;
+            const cpY = (prevY + y) / 2;
+            ctx.quadraticCurveTo(cpX, cpY, x, y);
+          }
+        }
+        
+        // Complete the filled area
+        for (let i = visibleFrames.length - 1; i >= 0; i--) {
+          const frame = visibleFrames[i];
+          const x = ((frame.time - startTime) / windowSize) * width;
+          const normalizedAmp = frame.amplitude / (maxAmplitude || 1);
+          const barHeight = normalizedAmp * (height * 0.8);
+          const y = height / 2 + barHeight / 2;
+          
+          if (i === visibleFrames.length - 1) {
+            ctx.lineTo(x, y);
+          } else {
+            const prevFrame = visibleFrames[i + 1];
+            const prevX = ((prevFrame.time - startTime) / windowSize) * width;
+            const prevNormalizedAmp = prevFrame.amplitude / (maxAmplitude || 1);
+            const prevBarHeight = prevNormalizedAmp * (height * 0.8);
+            const prevY = height / 2 + prevBarHeight / 2;
+            
+            const cpX = (prevX + x) / 2;
+            const cpY = (prevY + y) / 2;
+            ctx.quadraticCurveTo(cpX, cpY, x, y);
+          }
+        }
+        
+        ctx.closePath();
+        
+        // Use gradient for color
+        const gradient = ctx.createLinearGradient(0, 0, width, 0);
+        visibleFrames.forEach((frame, i) => {
+          const position = i / (visibleFrames.length - 1);
+          gradient.addColorStop(position, frame.color);
+        });
+        
+        ctx.fillStyle = gradient;
+        ctx.fill();
+      }
 
       // Draw playhead at the right edge
       const playheadX = ((now - startTime) / windowSize) * width;
@@ -133,7 +204,7 @@ export default function WaveformGraph({ waveform, currentTime, duration }: Wavef
     <div ref={containerRef} className="w-full">
       <canvas
         ref={canvasRef}
-        className="w-full rounded-md border border-solid border-black/[.08] bg-black/[.02] dark:border-white/[.145] dark:bg-white/[.02]"
+        className="w-full"
       />
     </div>
   );

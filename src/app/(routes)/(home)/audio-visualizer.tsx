@@ -271,126 +271,129 @@ export default function AudioVisualizer() {
   });
 
   return (
-    <div className="space-y-3">
-      <div className="bg-card rounded-lg border border-solid border-black/[.08] p-3 dark:border-white/[.145]">
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <Input
-                id="audio-file"
-                type="file"
-                accept="audio/*"
-                onChange={handleFileChange}
-                disabled={isProcessing}
-                className="h-8 cursor-pointer border-none text-xs shadow-none file:cursor-pointer"
-              />
-            </div>
-            <Button
-              type="submit"
-              disabled={!audioFile || isProcessing}
-              size="sm"
-              className="shrink-0"
-            >
-              {isProcessing ? "Processing..." : "Visualize"}
-            </Button>{" "}
-            {isProcessing && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={handleCancel}
-                className="shrink-0"
-              >
-                <X className="size-4" />
-              </Button>
-            )}
-          </div>
-        </form>
-      </div>
-
-      {audioUrl && (
-        <div className="bg-card rounded-lg border border-solid border-black/[.08] p-3 dark:border-white/[.145]">
-          <audio ref={audioRef} controls className="w-full" preload="auto">
-            <source src={audioUrl} type="audio/mpeg" />
-            Your browser does not support the audio element.
-          </audio>
+    <>
+      {allWaveform.length > 0 && audioUrl && (
+        <div className="fixed left-0 top-0 z-10 w-full">
+          <WaveformGraph
+            waveform={allWaveform}
+            currentTime={currentTime}
+            duration={duration}
+          />
         </div>
       )}
-
-      {allWaveform.length > 0 && audioUrl && (
-        <WaveformGraph
-          waveform={allWaveform}
-          currentTime={currentTime}
-          duration={duration}
-        />
-      )}
-
-      {displayChunk && (
-        <div className="space-y-3">
-          <div className="grid gap-4 lg:grid-cols-[400px_1fr]">
-            <div className="space-y-3">
-              {displayChunk.image_url && (
-                <div className="bg-card relative overflow-hidden rounded-lg border border-solid border-black/[.08] dark:border-white/[.145]">
-                  <img
-                    key={imageKey}
-                    src={displayChunk.image_url}
-                    alt="Emotion visualization"
-                    className="animate-in fade-in zoom-in-95 aspect-square w-full object-cover duration-700"
-                  />
-                </div>
+      <div className="space-y-3">
+        <div className="bg-card rounded-lg border border-solid border-black/[.08] p-3 dark:border-white/[.145]">
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <Input
+                  id="audio-file"
+                  type="file"
+                  accept="audio/*"
+                  onChange={handleFileChange}
+                  disabled={isProcessing}
+                  className="h-8 cursor-pointer border-none text-xs shadow-none file:cursor-pointer"
+                />
+              </div>{isProcessing && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleCancel}
+                  className="shrink-0"
+                >
+                  <X className="size-4" />
+                </Button>
               )}
+              <Button
+                type="submit"
+                disabled={!audioFile || isProcessing}
+                size="sm"
+                className="shrink-0"
+              >
+                {isProcessing ? "Processing..." : "Visualize"}
+              </Button>{" "}
+              
             </div>
+          </form>
+        </div>
 
-            <div className="space-y-3">
-              <div className="grid grid-cols-3 gap-3">
-                <MetricCard
-                  label="Tempo"
-                  value={displayChunk.tempo}
-                  unit="BPM"
-                  decimals={0}
-                />
-                <MetricCard
-                  label="Energy"
-                  value={displayChunk.energy}
-                  decimals={3}
-                />
-                <MetricCard label="Key" value={displayChunk.key} />
-              </div>
+        {audioUrl && (
+          <div className="bg-card rounded-lg border border-solid border-black/[.08] p-3 dark:border-white/[.145]">
+            <audio ref={audioRef} controls className="w-full" preload="auto">
+              <source src={audioUrl} type="audio/mpeg" />
+              Your browser does not support the audio element.
+            </audio>
+          </div>
+        )}
 
-              <div className="bg-card rounded-lg border border-solid border-black/[.08] p-4 dark:border-white/[.145]">
-                <h3 className="text-muted-foreground mb-3 text-xs font-semibold tracking-wide uppercase">
-                  Emotion Analysis
-                </h3>
-                <div className="space-y-2.5">
-                  {Object.entries(displayChunk.emotion)
-                    .filter(([key]) => key !== "reasoning")
-                    .sort(([, a], [, b]) => (b as number) - (a as number))
-                    .map(([emotion, value], index) => (
-                      <div
-                        key={emotion}
-                        className="animate-in slide-in-from-right-2 fade-in"
-                        style={{
-                          animationDelay: `${index * 50}ms`,
-                          animationDuration: "400ms",
-                        }}
-                      >
-                        <EmotionBar emotion={emotion} value={value as number} />
-                      </div>
-                    ))}
-                </div>
-                {displayChunk.emotion.reasoning && (
-                  <div className="animate-in fade-in mt-3 rounded-md bg-black/[.05] p-2.5 duration-500 dark:bg-white/[.06]">
-                    <p className="text-muted-foreground text-xs leading-relaxed">
-                      {displayChunk.emotion.reasoning}
-                    </p>
+        {displayChunk && (
+          <div className="space-y-3">
+            <div className="grid gap-4 lg:grid-cols-[400px_1fr]">
+              <div className="space-y-3">
+                {displayChunk.image_url && (
+                  <div className="bg-card relative overflow-hidden rounded-lg border border-solid border-black/[.08] dark:border-white/[.145]">
+                    <img
+                      key={imageKey}
+                      src={displayChunk.image_url}
+                      alt="Emotion visualization"
+                      className="animate-in fade-in zoom-in-95 aspect-square w-full object-cover duration-700"
+                    />
                   </div>
                 )}
               </div>
+
+              <div className="space-y-3">
+                <div className="grid grid-cols-3 gap-3">
+                  <MetricCard
+                    label="Tempo"
+                    value={displayChunk.tempo}
+                    unit="BPM"
+                    decimals={0}
+                  />
+                  <MetricCard
+                    label="Energy"
+                    value={displayChunk.energy}
+                    decimals={3}
+                  />
+                  <MetricCard label="Key" value={displayChunk.key} />
+                </div>
+
+                <div className="bg-card rounded-lg border border-solid border-black/[.08] p-4 dark:border-white/[.145]">
+                  <h3 className="text-muted-foreground mb-3 text-xs font-semibold tracking-wide uppercase">
+                    Emotion Analysis
+                  </h3>
+                  <div className="space-y-2.5">
+                    {Object.entries(displayChunk.emotion)
+                      .filter(([key]) => key !== "reasoning")
+                      .sort(([, a], [, b]) => (b as number) - (a as number))
+                      .map(([emotion, value], index) => (
+                        <div
+                          key={emotion}
+                          className="animate-in slide-in-from-right-2 fade-in"
+                          style={{
+                            animationDelay: `${index * 50}ms`,
+                            animationDuration: "400ms",
+                          }}
+                        >
+                          <EmotionBar emotion={emotion} value={value as number} />
+                        </div>
+                      ))}
+                  </div>
+                  {displayChunk.emotion.reasoning && (
+                    <div className="animate-in fade-in mt-3 rounded-md bg-black/[.05] p-2.5 duration-500 dark:bg-white/[.06]">
+                      <p className="text-muted-foreground text-xs leading-relaxed">
+                        {displayChunk.emotion.reasoning}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </>
   );
 }
 
