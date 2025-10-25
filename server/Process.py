@@ -86,7 +86,7 @@ class Process:
                 print(f"[Chunk {chunk_number + 1}] Tempo: {self.tempo:.1f} BPM")
                 
                 print(f"[Chunk {chunk_number + 1}] Detecting key...")
-                self.key = self.get_chunk_major_minor()
+                self.key = self.get_chunk_key()
                 print(f"[Chunk {chunk_number + 1}] Key: {self.key}")
                 
                 print(f"[Chunk {chunk_number + 1}] Calculating emotions with GPT...")
