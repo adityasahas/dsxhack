@@ -104,7 +104,7 @@ export default function AudioVisualizer() {
     if (allWaveform.length > 0 && displayChunk && audioRef.current) {
       console.log("Autoplay: Starting audio playback");
       const playPromise = audioRef.current.play();
-      
+
       if (playPromise !== undefined) {
         playPromise
           .then(() => {
@@ -166,14 +166,17 @@ export default function AudioVisualizer() {
 
       const { audioUrl } = await uploadResponse.json();
 
-      const processResponse = await fetch("http://localhost:8000/api/process-audio", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const processResponse = await fetch(
+        "http://localhost:8000/api/process-audio",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ audio_url: audioUrl }),
+          signal: abortControllerRef.current.signal,
         },
-        body: JSON.stringify({ audio_url: audioUrl }),
-        signal: abortControllerRef.current.signal,
-      });
+      );
 
       if (!processResponse.ok) {
         throw new Error("Processing failed");
@@ -217,19 +220,31 @@ export default function AudioVisualizer() {
               setStatus("Loading audio...");
             } else if (data.status === "waveform_ready") {
               setStatus("Waveform calculated...");
-              console.log("Waveform data received:", data.waveform.length, "frames");
+              console.log(
+                "Waveform data received:",
+                data.waveform.length,
+                "frames",
+              );
               setAllWaveform(data.waveform);
             } else if (data.status === "processing_chunk") {
               setStatus("Processing...");
               console.log("Received chunk data:", data.data);
               setCurrentChunk(data.data);
-              setChunkInfo({ current: data.chunk_number, total: data.total_chunks });
+              setChunkInfo({
+                current: data.chunk_number,
+                total: data.total_chunks,
+              });
             } else if (data.status === "complete") {
               setStatus("Complete!");
               toast.success("Audio processed successfully!");
             }
           } catch (err) {
-            console.error("Error parsing stream:", err, "Line:", line.substring(0, 100));
+            console.error(
+              "Error parsing stream:",
+              err,
+              "Line:",
+              line.substring(0, 100),
+            );
           }
         }
       }
@@ -257,7 +272,7 @@ export default function AudioVisualizer() {
 
   return (
     <div className="space-y-3">
-      <div className="rounded-lg border border-solid border-black/[.08] bg-card p-3 dark:border-white/[.145]">
+      <div className="bg-card rounded-lg border border-solid border-black/[.08] p-3 dark:border-white/[.145]">
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="flex gap-2">
             <div className="flex-1">
@@ -267,37 +282,18 @@ export default function AudioVisualizer() {
                 accept="audio/*"
                 onChange={handleFileChange}
                 disabled={isProcessing}
-                className="h-8 cursor-pointer text-xs file:cursor-pointer border-none shadow-none"
+                className="h-8 cursor-pointer border-none text-xs shadow-none file:cursor-pointer"
               />
             </div>
-            <Button type="submit" disabled={!audioFile || isProcessing} size="sm" className="shrink-0">
+            <Button
+              type="submit"
+              disabled={!audioFile || isProcessing}
+              size="sm"
+              className="shrink-0"
+            >
               {isProcessing ? "Processing..." : "Visualize"}
-            </Button>
-          </div>
-        </form>
-      </div>
-
-      {isProcessing && (
-        <div className="rounded-lg border border-solid border-black/[.08] bg-card p-3 dark:border-white/[.145]">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex-1 space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">{status}</span>
-                  <span className="font-medium tabular-nums">{progress}%</span>
-                </div>
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/[.05] dark:bg-white/[.06]">
-                  <div
-                    className="h-full bg-primary transition-all duration-300 ease-out"
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-                {chunkInfo.total > 0 && (
-                  <p className="text-center text-xs text-muted-foreground">
-                    Chunk {chunkInfo.current} of {chunkInfo.total}
-                  </p>
-                )}
-              </div>
+            </Button>{" "}
+            {isProcessing && (
               <Button
                 type="button"
                 variant="ghost"
@@ -307,13 +303,13 @@ export default function AudioVisualizer() {
               >
                 <X className="size-4" />
               </Button>
-            </div>
+            )}
           </div>
-        </div>
-      )}
+        </form>
+      </div>
 
       {audioUrl && (
-        <div className="rounded-lg border border-solid border-black/[.08] bg-card p-3 dark:border-white/[.145]">
+        <div className="bg-card rounded-lg border border-solid border-black/[.08] p-3 dark:border-white/[.145]">
           <audio ref={audioRef} controls className="w-full" preload="auto">
             <source src={audioUrl} type="audio/mpeg" />
             Your browser does not support the audio element.
@@ -334,12 +330,12 @@ export default function AudioVisualizer() {
           <div className="grid gap-4 lg:grid-cols-[400px_1fr]">
             <div className="space-y-3">
               {displayChunk.image_url && (
-                <div className="relative overflow-hidden rounded-lg border border-solid border-black/[.08] bg-card dark:border-white/[.145]">
+                <div className="bg-card relative overflow-hidden rounded-lg border border-solid border-black/[.08] dark:border-white/[.145]">
                   <img
                     key={imageKey}
                     src={displayChunk.image_url}
                     alt="Emotion visualization"
-                    className="aspect-square w-full object-cover animate-in fade-in zoom-in-95 duration-700"
+                    className="animate-in fade-in zoom-in-95 aspect-square w-full object-cover duration-700"
                   />
                 </div>
               )}
@@ -347,40 +343,49 @@ export default function AudioVisualizer() {
 
             <div className="space-y-3">
               <div className="grid grid-cols-3 gap-3">
-              <MetricCard label="Tempo" value={displayChunk.tempo} unit="BPM" decimals={0} />
-              <MetricCard label="Energy" value={displayChunk.energy} decimals={3} />
-              <MetricCard label="Key" value={displayChunk.key} />
-            </div>
-
-            <div className="rounded-lg border border-solid border-black/[.08] bg-card p-4 dark:border-white/[.145]">
-              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Emotion Analysis
-              </h3>
-              <div className="space-y-2.5">
-                {Object.entries(displayChunk.emotion)
-                  .filter(([key]) => key !== "reasoning")
-                  .sort(([, a], [, b]) => (b as number) - (a as number))
-                  .map(([emotion, value], index) => (
-                    <div
-                      key={emotion}
-                      className="animate-in slide-in-from-right-2 fade-in"
-                      style={{
-                        animationDelay: `${index * 50}ms`,
-                        animationDuration: "400ms",
-                      }}
-                    >
-                      <EmotionBar emotion={emotion} value={value as number} />
-                    </div>
-                  ))}
+                <MetricCard
+                  label="Tempo"
+                  value={displayChunk.tempo}
+                  unit="BPM"
+                  decimals={0}
+                />
+                <MetricCard
+                  label="Energy"
+                  value={displayChunk.energy}
+                  decimals={3}
+                />
+                <MetricCard label="Key" value={displayChunk.key} />
               </div>
-              {displayChunk.emotion.reasoning && (
-                <div className="mt-3 rounded-md bg-black/[.05] p-2.5 dark:bg-white/[.06] animate-in fade-in duration-500">
-                  <p className="text-xs leading-relaxed text-muted-foreground">
-                    {displayChunk.emotion.reasoning}
-                  </p>
+
+              <div className="bg-card rounded-lg border border-solid border-black/[.08] p-4 dark:border-white/[.145]">
+                <h3 className="text-muted-foreground mb-3 text-xs font-semibold tracking-wide uppercase">
+                  Emotion Analysis
+                </h3>
+                <div className="space-y-2.5">
+                  {Object.entries(displayChunk.emotion)
+                    .filter(([key]) => key !== "reasoning")
+                    .sort(([, a], [, b]) => (b as number) - (a as number))
+                    .map(([emotion, value], index) => (
+                      <div
+                        key={emotion}
+                        className="animate-in slide-in-from-right-2 fade-in"
+                        style={{
+                          animationDelay: `${index * 50}ms`,
+                          animationDuration: "400ms",
+                        }}
+                      >
+                        <EmotionBar emotion={emotion} value={value as number} />
+                      </div>
+                    ))}
                 </div>
-              )}
-            </div>
+                {displayChunk.emotion.reasoning && (
+                  <div className="animate-in fade-in mt-3 rounded-md bg-black/[.05] p-2.5 duration-500 dark:bg-white/[.06]">
+                    <p className="text-muted-foreground text-xs leading-relaxed">
+                      {displayChunk.emotion.reasoning}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -424,11 +429,17 @@ function MetricCard({
   }, [value]);
 
   return (
-    <div className="rounded-lg border border-solid border-black/[.08] bg-card p-3 dark:border-white/[.145]">
-      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+    <div className="bg-card rounded-lg border border-solid border-black/[.08] p-3 dark:border-white/[.145]">
+      <p className="text-muted-foreground text-[10px] tracking-wide uppercase">
+        {label}
+      </p>
       <p className="mt-1 text-xl font-semibold tabular-nums">
         {typeof value === "string" ? value : displayValue.toFixed(decimals)}
-        {unit && <span className="ml-1 text-xs font-normal text-muted-foreground">{unit}</span>}
+        {unit && (
+          <span className="text-muted-foreground ml-1 text-xs font-normal">
+            {unit}
+          </span>
+        )}
       </p>
     </div>
   );
@@ -446,15 +457,16 @@ function EmotionBar({ emotion, value }: { emotion: string; value: number }) {
     <div className="space-y-1">
       <div className="flex items-center justify-between text-xs">
         <span className="capitalize">{emotion}</span>
-        <span className="font-medium tabular-nums text-muted-foreground">{value.toFixed(0)}%</span>
+        <span className="text-muted-foreground font-medium tabular-nums">
+          {value.toFixed(0)}%
+        </span>
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/[.05] dark:bg-white/[.06]">
         <div
-          className="h-full bg-primary transition-all duration-700 ease-out"
+          className="bg-primary h-full transition-all duration-700 ease-out"
           style={{ width: `${width}%` }}
         />
       </div>
     </div>
   );
 }
-
