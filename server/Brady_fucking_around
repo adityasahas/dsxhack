@@ -6,8 +6,10 @@ from sklearn.preprocessing import MinMaxScaler
 from matplotlib.animation import FuncAnimation
 import time
 
+frame_data_list = []
+
 # === 1. Load audio ===
-y, sr = librosa.load("song.mp3.mp3", sr=None, mono=True)
+y, sr = librosa.load("song.mp3", sr=None, mono=True)
 total_seconds = len(y) / sr
 
 # === 2. Compute frame-level audio features ===
@@ -70,7 +72,7 @@ start_time = None
 num_frames = len(rms_norm)
 
 def update(frame):
-    global gradient_data, start_time
+    global gradient_data, start_time, frame_data_list
     if start_time is None:
         start_time = time.time()
     
@@ -104,6 +106,15 @@ def update(frame):
     # --- Update RMS playhead ---
     rms_playhead_line.set_data([elapsed, elapsed], [0, rms.max()*1.05])
     
+    #Update frame data list
+    #This is a list of lists, it goes [time_elapsed, R, G, B, RMS]
+    frame_data_list.append([
+        elapsed,
+        float(colors[current_frame][0]),  # R
+        float(colors[current_frame][1]),  # G
+        float(colors[current_frame][2]),  # B
+        float(rms[current_frame]),        # RMS
+    ])
     return [im, time_text, rms_playhead_line]
 
 # === 6. Play sound + animate ===
@@ -112,3 +123,5 @@ sd.play(y, sr)
 ani = FuncAnimation(fig, update, frames=num_frames, interval=30, blit=False)
 plt.show()
 sd.wait()
+for i in range(min(10, len(frame_data_list))):
+    print(frame_data_list[i])
