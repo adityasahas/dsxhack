@@ -128,74 +128,120 @@ class Process:
         `chunk` is a list or numpy array of amplitude values.
         """
         if len(self.chunk1) == 0:
-            return 0.0  # avoid division by zero
-    
-        energy = np.sum(np.square(self.chunk1)) / len(self.chunk1)
-        return energy
+            return 0.0
+
+        # Convert to mono float32 just in case
+        y = librosa.util.normalize(self.chunk1.astype(float))
+
+        # Compute RMS (frame-wise)
+        rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=512)[0]
+
+        # Convert to decibels for perceptual scaling
+        rms_db = librosa.amplitude_to_db(rms, ref=np.max)
+
+        # Normalize 0–1 range (0 = silence, 1 = loudest)
+        energy = np.clip((rms_db + 60) / 60, 0, 1)
+
+        return float(np.mean(energy))
     def get_chunk_tempo(self):
         # get the tempo from  one chunk of the audio file
         if len(self.chunk1) == 0:
-            return 0.0  # avoid empty chunks
+            return 0.0
 
-        # Compute onset strength (rhythmic intensity)
-        onset_env = librosa.onset.onset_strength(y=self.chunk1, sr=self.sr)
+        # Separate harmonic and percussive parts
+        y_harm, y_perc = librosa.effects.hpss(self.chunk1)
 
-        # Estimate tempo (returns array, so take first value)
-        tempo = librosa.beat.tempo(onset_envelope=onset_env, sr=self.sr)[0]
+        # Onset strength envelope from percussive component
+        onset_env = librosa.onset.onset_strength(y=y_perc, sr=self.sr, hop_length=256)
 
-        return tempo
+        # Estimate tempo using global autocorrelation
+        tempo = librosa.beat.tempo(onset_envelope=onset_env, sr=self.sr, aggregate=None)
+
+        # Use median to reduce jitter between short chunks
+        bpm = float(np.median(tempo))
+
+        return bpm
     
-    def get_chunk_major_minor(self):
+    def get_chunk_key(self):
         """
-        Determine if the current chunk (self.chunk1) is in a major or minor key.
-        Returns a string like "C major" or "A minor".
+        Estimate musical key (e.g., 'C major' or 'A minor') for current chunk.
         """
         if len(self.chunk1) == 0:
-            return 0
+            return "Unknown"
 
-    # Compute chroma features
-        chroma = librosa.feature.chroma_cqt(y= self.chunk1, sr=self.sr)
-        chroma_mean = np.mean(chroma, axis=1)  # average across time
+        y = self.chunk1
 
-        # Krumhansl major/minor key profiles
-        major_profile = np.array([6.35, 2.23, 3.48, 2.33, 4.38, 4.09,
-                                2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
-        minor_profile = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53,
-                                2.54, 4.75, 3.98, 2.69, 3.34, 3.17])
+        # Emphasize harmonic content
+        y_harm = librosa.effects.harmonic(y)
 
-        # Compare chroma to all 12 key rotations
-        major_corr = [np.corrcoef(np.roll(major_profile, i), chroma_mean)[0, 1] for i in range(12)]
-        minor_corr = [np.corrcoef(np.roll(minor_profile, i), chroma_mean)[0, 1] for i in range(12)]
+        # Compute chroma features (12 pitch classes)
+        chroma = librosa.feature.chroma_cqt(y=y_harm, sr=self.sr)
+        chroma_mean = np.mean(chroma, axis=1)
 
-        # Determine the best match
-        if max(major_corr) > max(minor_corr):
-            key_index = np.argmax(major_corr)
-            key_type = "major"
+        # Normalize chroma vector
+        chroma_mean /= chroma_mean.sum() + 1e-6
+
+        # Key templates from major/minor profiles (Krumhansl–Kessler)
+        major_profile = np.array(
+            [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88]
+        )
+        minor_profile = np.array(
+            [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17]
+        )
+
+        # Rotate templates to match each of the 12 pitch classes
+        corrs_major = [np.corrcoef(np.roll(major_profile, i), chroma_mean)[0, 1] for i in range(12)]
+        corrs_minor = [np.corrcoef(np.roll(minor_profile, i), chroma_mean)[0, 1] for i in range(12)]
+
+        best_major = np.argmax(corrs_major)
+        best_minor = np.argmax(corrs_minor)
+
+        # Compare correlation strength
+        if corrs_major[best_major] >= corrs_minor[best_minor]:
+            key = librosa.midi_to_note(12 + best_major, octave=False) + " major"
         else:
-            key_index = np.argmax(minor_corr)
-            key_type = "minor"
+            key = librosa.midi_to_note(12 + best_minor, octave=False) + " minor"
 
-        return key_type
+        return key
+
         
     def calculate_emotion(self) -> EmotionOutput:
         #Calculate the emotion of the current chunk using structured outputs. Returns an EmotionOutput object with percentage distribution for each emotion.
         
-        prompt = f"""
-        
-            You are a music emotion classifier. 
-    Your task is to classify the emotion of a song chunk based on the following features:
+        prompt = fprompt = f"""
+You are a music emotion classifier.
 
-    - Energy (average amplitude squared): {self.energy}
-    - Tempo (in BPM): {self.tempo}
-    - Key (note and mode): {self.key}
+Your task is to classify the emotion of a short audio chunk based on these extracted musical features:
 
-    You must estimate the emotional composition of the music by assigning a percentage likelihood (0-100%) to each of the following emotion categories:
-    Happy, Sad, Calm, Energetic, Excited, Relaxed, Angry, Romantic, Other.
+- **Energy (0.0–1.0):** A normalized measure of loudness and intensity computed from RMS energy.
+  • Low values (~0.0–0.3) indicate soft, gentle, or quiet passages.
+  • Mid values (~0.4–0.7) indicate moderate intensity.
+  • High values (~0.8–1.0) indicate strong, loud, or forceful segments.
 
-    Instructions:
-    1. The percentages must sum to **100%** across all emotions.
-    2. Provide a **brief reasoning** that connects the musical features (energy, tempo, key) to the assigned emotion distribution.
-    3. Return your response as a structured JSON with fields: happy, sad, calm, energetic, excited, relaxed, angry, romantic, other (all as floats), and reasoning (as a string)."""
+- **Tempo (in BPM):** The estimated local beat speed of the chunk.
+  • Slow tempo (<80 BPM) = calm, relaxed, or romantic.
+  • Medium tempo (80–120 BPM) = balanced or emotional.
+  • Fast tempo (>120 BPM) = energetic, excited, or tense.
+
+- **Key (note and mode):** The detected tonal center and mode of the music (e.g., 'C major', 'A minor').
+  • Major keys generally express brighter, happier, or more confident moods.
+  • Minor keys often sound sadder, darker, or more emotional.
+
+Here are the feature values for this audio chunk:
+- Energy: {self.energy:.3f}
+- Tempo: {self.tempo:.2f} BPM
+- Key: {self.key}
+
+Based on these features:
+1. Estimate the emotional composition of the music by assigning a **percentage likelihood (0–100%)** to each of these categories:
+   Happy, Sad, Calm, Energetic, Excited, Relaxed, Angry, Romantic, Other.
+2. The total across all emotions **must sum to 100%**.
+3. Provide a short **reasoning** connecting the musical features (energy, tempo, key/mode) to your emotion estimates.
+
+Return the result as a valid JSON object with these fields:
+`happy`, `sad`, `calm`, `energetic`, `excited`, `relaxed`, `angry`, `romantic`, `other`, and `reasoning`.
+"""
+
 
         # Use OpenAI SDK with structured output
         try:
