@@ -1,8 +1,8 @@
 import {listGenerations} from "@/actions/generation/list";
+import { ExternalLink } from "lucide-react";
 
 export default async function GenerationsList() {
   const generations = await listGenerations();
-  console.log(generations);
 
   if (generations.length === 0) {
     return (
@@ -23,8 +23,14 @@ export default async function GenerationsList() {
           >
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex-1 space-y-1">
-                <a href={gen.audioUrl} target="_blank" rel="noopener noreferrer" className="underline">
-                  <p className="font-semibold">{gen.fileName}</p>
+                <a 
+                  href={gen.audioUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="inline-flex items-center gap-1.5 font-semibold transition-colors hover:text-muted-foreground"
+                >
+                  {gen.fileName}
+                  <ExternalLink className="size-3.5" />
                 </a>
                 <div className="flex gap-3 text-xs text-muted-foreground">
                   <span>{gen.fileSize} MB</span>
