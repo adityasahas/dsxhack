@@ -13,11 +13,26 @@ export default function AudioVisualizer() {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState("");
   const [currentChunk, setCurrentChunk] = useState<ChunkData | null>(null);
-  const [previousChunk, setPreviousChunk] = useState<ChunkData | null>(null);
+  const [displayChunk, setDisplayChunk] = useState<ChunkData | null>(null);
   const [chunkInfo, setChunkInfo] = useState({ current: 0, total: 0 });
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [imageKey, setImageKey] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (!currentChunk) return;
+
+    if (currentChunk.image_url) {
+      const img = new Image();
+      img.onload = () => {
+        setDisplayChunk(currentChunk);
+        setImageKey((prev) => prev + 1);
+      };
+      img.src = currentChunk.image_url;
+    } else {
+      setDisplayChunk(currentChunk);
+    }
+  }, [currentChunk]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -104,10 +119,8 @@ export default function AudioVisualizer() {
               setStatus("Loading audio...");
               } else if (data.status === "processing_chunk") {
                 setStatus("Processing...");
-                setPreviousChunk(currentChunk);
                 setCurrentChunk(data.data);
                 setChunkInfo({ current: data.chunk_number, total: data.total_chunks });
-                setImageKey((prev) => prev + 1);
             } else if (data.status === "complete") {
               setStatus("Complete!");
               toast.success("Audio processed successfully!");
@@ -141,7 +154,7 @@ export default function AudioVisualizer() {
                 accept="audio/*"
                 onChange={handleFileChange}
                 disabled={isProcessing}
-                className="h-8 cursor-pointer text-xs file:cursor-pointer"
+                className="h-8 cursor-pointer text-xs file:cursor-pointer border-none shadow-none"
               />
             </div>
             <Button type="submit" disabled={!audioFile || isProcessing} size="sm" className="shrink-0">
@@ -186,14 +199,14 @@ export default function AudioVisualizer() {
         </div>
       )}
 
-      {(currentChunk || previousChunk) && (
+      {displayChunk && (
         <div className="grid gap-4 lg:grid-cols-[400px_1fr]">
           <div className="space-y-3">
-            {(currentChunk?.image_url || previousChunk?.image_url) && (
+            {displayChunk.image_url && (
               <div className="relative overflow-hidden rounded-lg border border-solid border-black/[.08] bg-card dark:border-white/[.145]">
                 <img
                   key={imageKey}
-                  src={currentChunk?.image_url || previousChunk?.image_url}
+                  src={displayChunk.image_url}
                   alt="Emotion visualization"
                   className="aspect-square w-full object-cover animate-in fade-in zoom-in-95 duration-700"
                 />
@@ -212,9 +225,9 @@ export default function AudioVisualizer() {
 
           <div className="space-y-3">
             <div className="grid grid-cols-3 gap-3">
-              <MetricCard label="Tempo" value={currentChunk?.tempo || previousChunk?.tempo || 0} unit="BPM" decimals={0} />
-              <MetricCard label="Energy" value={currentChunk?.energy || previousChunk?.energy || 0} decimals={3} />
-              <MetricCard label="Key" value={currentChunk?.key || previousChunk?.key || "-"} />
+              <MetricCard label="Tempo" value={displayChunk.tempo} unit="BPM" decimals={0} />
+              <MetricCard label="Energy" value={displayChunk.energy} decimals={3} />
+              <MetricCard label="Key" value={displayChunk.key} />
             </div>
 
             <div className="rounded-lg border border-solid border-black/[.08] bg-card p-4 dark:border-white/[.145]">
@@ -222,7 +235,7 @@ export default function AudioVisualizer() {
                 Emotion Analysis
               </h3>
               <div className="space-y-2.5">
-                {Object.entries(currentChunk?.emotion || previousChunk?.emotion || {})
+                {Object.entries(displayChunk.emotion)
                   .filter(([key]) => key !== "reasoning")
                   .sort(([, a], [, b]) => (b as number) - (a as number))
                   .map(([emotion, value], index) => (
@@ -238,10 +251,10 @@ export default function AudioVisualizer() {
                     </div>
                   ))}
               </div>
-              {(currentChunk?.emotion.reasoning || previousChunk?.emotion.reasoning) && (
+              {displayChunk.emotion.reasoning && (
                 <div className="mt-3 rounded-md bg-black/[.05] p-2.5 dark:bg-white/[.06] animate-in fade-in duration-500">
                   <p className="text-xs leading-relaxed text-muted-foreground">
-                    {currentChunk?.emotion.reasoning || previousChunk?.emotion.reasoning}
+                    {displayChunk.emotion.reasoning}
                   </p>
                 </div>
               )}
