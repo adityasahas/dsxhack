@@ -6,7 +6,7 @@
     "dev": "concurrently \"bun run dev:next\" \"bun run dev:python\"",
     "dev:next": "next dev --turbopack",
     "dev:python": "node server/start.js",
-    "build": "next build",
+    "build": "npm install --cpu=x64 --os=linux lightningcss && next build",
     "start": "next start",
     "lint": "next lint",
     "db:generate": "drizzle-kit generate",
