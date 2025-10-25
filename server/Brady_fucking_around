@@ -9,7 +9,7 @@ import time
 frame_data_list = []
 
 # === 1. Load audio ===
-y, sr = librosa.load("song.mp3", sr=None, mono=True)
+y, sr = librosa.load("song1.mp3", sr=None, mono=True)
 total_seconds = len(y) / sr
 
 # === 2. Compute frame-level audio features ===
@@ -27,20 +27,37 @@ centroid_norm = (spec_centroid - spec_centroid.min()) / (spec_centroid.max() - s
 # RMS times for the amplitude graph
 rms_times = np.linspace(0, total_seconds, len(rms))
 
+def brighten_color(color, factor):
+    """Brighten an RGB color array (values 0-1). Factor >1 increases brightness."""
+    brightened = color * factor
+    return np.clip(brightened, 0, 1)
+
 # === 3. Map frames to emotion → RGB ===
 def emotion_to_color(loudness, brightness):
-    """Map arousal (energy) and valence (brightness) to an RGB color."""
-    happy = np.array([255, 223, 0])    # yellow
-    sad = np.array([0, 51, 102])       # dark blue
-    calm = np.array([128, 0, 128])     # purple
-    angry = np.array([255, 77, 0])     # red-orange
+    """Map arousal (energy) and valence (brightness) to an RGB color (vibrant)."""
+    happy = np.array([255, 230, 0])     # bright yellow
+    sad   = np.array([0, 0, 200])       # bright blue
+    calm  = np.array([0, 255, 150])     # bright teal
+    angry = np.array([255, 0, 0])       # bright red
+
     color = (
         brightness * (loudness * happy + (1 - loudness) * calm) +
         (1 - brightness) * (loudness * angry + (1 - loudness) * sad)
     )
+    brighten_color(color, factor=2)
     return np.clip(color / 255, 0, 1)
 
-colors = np.array([emotion_to_color(a, v) for a, v in zip(rms_norm, centroid_norm)])
+colors_raw = np.array([emotion_to_color(a, v) for a, v in zip(rms_norm, centroid_norm)])
+
+# --- Apply block_size for discrete sections ---
+block_size = 30
+num_frames = len(colors_raw)
+colors = np.zeros_like(colors_raw)
+
+for i in range(num_frames):
+    block_index = i // block_size
+    start_idx = block_index * block_size
+    colors[i] = colors_raw[start_idx]
 
 # === 4. Visualization setup ===
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 5), gridspec_kw={'height_ratios':[1,1]})
@@ -126,5 +143,3 @@ sd.play(y, sr)
 ani = FuncAnimation(fig, update, frames=num_frames, interval=30, blit=False)
 plt.show()
 sd.wait()
-for i in range(min(10, len(frame_data_list))):
-    print(frame_data_list[i])
