@@ -9,7 +9,7 @@ import time
 frame_data_list = []
 
 # === 1. Load audio ===
-y, sr = librosa.load("song1.mp3", sr=None, mono=True)
+y, sr = librosa.load("song0.mp3", sr=None, mono=True)
 total_seconds = len(y) / sr
 
 # === 2. Compute frame-level audio features ===
@@ -28,24 +28,25 @@ centroid_norm = (spec_centroid - spec_centroid.min()) / (spec_centroid.max() - s
 rms_times = np.linspace(0, total_seconds, len(rms))
 
 def brighten_color(color, factor):
-    """Brighten an RGB color array (values 0-1). Factor >1 increases brightness."""
-    brightened = color * factor
+    """Brighten an RGB color without washing out white."""
+    brightened = color + (1 - color) * (factor - 1)
     return np.clip(brightened, 0, 1)
 
 # === 3. Map frames to emotion → RGB ===
 def emotion_to_color(loudness, brightness):
     """Map arousal (energy) and valence (brightness) to an RGB color (vibrant)."""
-    happy = np.array([255, 230, 0])     # bright yellow
-    sad   = np.array([0, 0, 200])       # bright blue
-    calm  = np.array([0, 255, 150])     # bright teal
-    angry = np.array([255, 0, 0])       # bright red
+    happy = np.array([255, 215, 0])     # slightly deeper gold
+    sad   = np.array([0, 0, 100])       # darker blue
+    calm  = np.array([0, 180, 120])     # teal but deeper
+    angry = np.array([200, 0, 0])       # darker red
 
     color = (
         brightness * (loudness * happy + (1 - loudness) * calm) +
         (1 - brightness) * (loudness * angry + (1 - loudness) * sad)
     )
-    brighten_color(color, factor=2)
-    return np.clip(color / 255, 0, 1)
+    color = np.clip(color / 255, 0, 1)
+    color=brighten_color(color, factor=1.2)
+    return color
 
 colors_raw = np.array([emotion_to_color(a, v) for a, v in zip(rms_norm, centroid_norm)])
 
@@ -96,49 +97,55 @@ def update(frame):
     elapsed = time.time() - start_time
     elapsed = min(elapsed, total_seconds)
     if elapsed >= total_seconds:
-        ani.event_source.stop()  # stop the animation
+        ani.event_source.stop()
         elapsed = total_seconds
     
-    # Map elapsed to current frame
+    # --- Map elapsed time to audio frame ---
     current_frame = int(elapsed / total_seconds * num_frames)
     current_frame = min(current_frame, num_frames - 1)
     
-    # --- Update gradient with smooth emotional color ---
+    # --- Compute color ---
     new_color = colors[current_frame]
-    prev_color = gradient_data[:, -1, :]
-    blended = 0.8 * prev_color + 0.2 * new_color  # gradual blending
+
+    # --- Shift gradient and add new bar ---
     gradient_data = np.roll(gradient_data, -1, axis=1)
-    gradient_data[:, -1, :] = blended
-    
-    # Optional vertical fade for smoothness
-    for i in range(gradient_height):
-        gradient_data[i, -1, :] *= (0.7 + 0.3 * i / gradient_height)
-    
+    gradient_data[:, -1, :] = new_color
+
+    # --- Mild smoothing between bars (keeps structure but softens edges) ---
+    kernel = np.array([0.1, 0.15, 0.5, 0.15, 0.1])
+    for c in range(3):
+        gradient_data[:, :, c] = np.convolve(
+            gradient_data[0, :, c], kernel, mode="same"
+        )[None, :]  # apply along the x-axis only
+
+    # --- Update image ---
     im.set_data(gradient_data)
-    
-    # --- Update timestamp ---
+
+    # --- Update timestamp text ---
     current_min = int(elapsed // 60)
     current_sec = int(elapsed % 60)
     total_min = int(total_seconds // 60)
     total_sec = int(total_seconds % 60)
     time_text.set_text(f"{current_min:02d}:{current_sec:02d} / {total_min:02d}:{total_sec:02d}")
-    
-    # --- Update RMS playhead ---
-    rms_playhead_line.set_data([elapsed, elapsed], [0, rms.max()*1.05])
-    
-    #Update frame data list
-    #This is a list of lists, it goes [time_elapsed, R, G, B, RMS]
+
+    # --- Update RMS playhead line ---
+    rms_playhead_line.set_data([elapsed, elapsed], [0, rms.max() * 1.05])
+
+    # --- Record frame data ---
     frame_data_list.append([
         elapsed,
-        float(colors[current_frame][0]),  # R
-        float(colors[current_frame][1]),  # G
-        float(colors[current_frame][2]),  # B
-        float(rms[current_frame]),        # RMS
+        float(new_color[0]),
+        float(new_color[1]),
+        float(new_color[2]),
+        float(rms[current_frame]),
     ])
+
     return [im, time_text, rms_playhead_line]
 
+
+
 # === 6. Play sound + animate ===
-time.sleep(0.05)
+time.sleep(0.1)
 sd.play(y, sr)
 ani = FuncAnimation(fig, update, frames=num_frames, interval=30, blit=False)
 plt.show()
