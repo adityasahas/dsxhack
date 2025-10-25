@@ -2,8 +2,9 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
+import { X } from "lucide-react";
 import type { StreamResponse, ChunkData } from "@/types/audio";
 
 export default function AudioVisualizer() {
@@ -16,6 +17,7 @@ export default function AudioVisualizer() {
   const [chunkInfo, setChunkInfo] = useState({ current: 0, total: 0 });
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [imageKey, setImageKey] = useState(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -25,10 +27,22 @@ export default function AudioVisualizer() {
     }
   };
 
+  const handleCancel = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsProcessing(false);
+    setProgress(0);
+    setStatus("");
+    toast.info("Processing cancelled");
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!audioFile) return;
 
+    abortControllerRef.current = new AbortController();
     setIsProcessing(true);
     setProgress(0);
     setCurrentChunk(null);
@@ -40,6 +54,7 @@ export default function AudioVisualizer() {
       const uploadResponse = await fetch("/api/upload", {
         method: "POST",
         body: formData,
+        signal: abortControllerRef.current.signal,
       });
 
       if (!uploadResponse.ok) {
@@ -54,6 +69,7 @@ export default function AudioVisualizer() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ audio_url: audioUrl }),
+        signal: abortControllerRef.current.signal,
       });
 
       if (!processResponse.ok) {
@@ -101,11 +117,15 @@ export default function AudioVisualizer() {
           }
         }
       }
-    } catch (error) {
+    } catch (error: any) {
+      if (error.name === "AbortError") {
+        return;
+      }
       toast.error("Failed to process audio");
       console.error(error);
     } finally {
       setIsProcessing(false);
+      abortControllerRef.current = null;
     }
   };
 
@@ -134,21 +154,34 @@ export default function AudioVisualizer() {
       {isProcessing && (
         <div className="rounded-lg border border-solid border-black/[.08] bg-card p-3 dark:border-white/[.145]">
           <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">{status}</span>
-              <span className="font-medium tabular-nums">{progress}%</span>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex-1 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">{status}</span>
+                  <span className="font-medium tabular-nums">{progress}%</span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/[.05] dark:bg-white/[.06]">
+                  <div
+                    className="h-full bg-primary transition-all duration-300 ease-out"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+                {chunkInfo.total > 0 && (
+                  <p className="text-center text-xs text-muted-foreground">
+                    Chunk {chunkInfo.current} of {chunkInfo.total}
+                  </p>
+                )}
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={handleCancel}
+                className="shrink-0"
+              >
+                <X className="size-4" />
+              </Button>
             </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/[.05] dark:bg-white/[.06]">
-              <div
-                className="h-full bg-primary transition-all duration-300 ease-out"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-            {chunkInfo.total > 0 && (
-              <p className="text-center text-xs text-muted-foreground">
-                Chunk {chunkInfo.current} of {chunkInfo.total}
-              </p>
-            )}
           </div>
         </div>
       )}
