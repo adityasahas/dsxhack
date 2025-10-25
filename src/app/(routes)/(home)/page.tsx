@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 import SignOutButton from "../(auth)/components/button-signout";
 import { getMe } from "@/actions/user";
-import AudioUpload from "./audio-upload";
+import AudioVisualizer from "./audio-visualizer";
 import GenerationsList from "./generations-list";
 
 export default async function Home() {
@@ -20,7 +20,7 @@ export default async function Home() {
             </div>
             <SignOutButton />
           </div>
-          <AudioUpload />
+          <AudioVisualizer />
           <GenerationsList />
         </main>
       ) : (

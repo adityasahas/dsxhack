@@ -1,12 +1,10 @@
 import librosa
 import numpy as np
-import matplotlib.pyplot as plt
 import requests
 import io
-from config import Settings
+from config import settings
 from openai import OpenAI
 from pydantic import BaseModel, Field
-from openai import OpenAI
 
 class EmotionOutput(BaseModel):
     """Structured output for music emotion classification with percentage distribution"""
@@ -28,7 +26,7 @@ class EmotionOutput(BaseModel):
 class Process:
 
     def __init__(self, url):
-        self.openaikey = Settings.OPENAI_API_KEY
+        self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
         self.url = url
         self.wave = None
         self.sr = None
@@ -36,8 +34,10 @@ class Process:
         self.energy = None
         self.key = None
         self.tempo = None
+        self.emotions = []
 
     def process_waveform(self):   
+        """Generator that yields chunk results as they're processed"""
         try: 
             response = requests.get(self.url)
             response.raise_for_status()
@@ -45,22 +45,49 @@ class Process:
 
             self.wave, self.sr = librosa.load(audio_data, sr = None)
             samples_per_chunk, hop_samples = self.chunk()
+            
+            total_chunks = (len(self.wave) - samples_per_chunk) // hop_samples
+            chunk_number = 0
+            
             for start in range(0, len(self.wave) - samples_per_chunk, hop_samples):
                 end = start + samples_per_chunk
                 chunk = self.wave[start:end]
                 self.chunk1 = chunk
-                if self.get_chunk_energy() > 0:
-                    self.energy = self.get_chunk_energy()
-                if self.get_chunk_tempo() > 0:
-                    self.tempo = self.get_chunk_tempo()
-                if self.get_chunk_major_minor():
-                    self.key = self.get_chunk_major_minor()
+                
+                self.energy = self.get_chunk_energy()
+                self.tempo = self.get_chunk_tempo()
+                self.key = self.get_chunk_major_minor()
+                
                 emotional_output = self.calculate_emotion()
-                image = self.generate_emotion_image()
-            
+                self.emotions.append(emotional_output)
+                
+                image_url = self.generate_emotion_image()
+                
+                chunk_number += 1
+                
+                yield {
+                    "chunk_number": chunk_number,
+                    "total_chunks": total_chunks,
+                    "energy": float(self.energy),
+                    "tempo": float(self.tempo),
+                    "key": self.key,
+                    "emotion": {
+                        "happy": emotional_output.happy,
+                        "sad": emotional_output.sad,
+                        "calm": emotional_output.calm,
+                        "energetic": emotional_output.energetic,
+                        "excited": emotional_output.excited,
+                        "relaxed": emotional_output.relaxed,
+                        "angry": emotional_output.angry,
+                        "romantic": emotional_output.romantic,
+                        "other": emotional_output.other,
+                        "reasoning": emotional_output.reasoning
+                    },
+                    "image_url": image_url
+                }
                 
         except Exception as e:
-            print(f"Could not load file: {e}")
+            yield {"error": f"Could not load file: {str(e)}"}
     #def get 
     def chunk(self):
         chunk_duration = 2.0
@@ -161,43 +188,43 @@ class Process:
     
     def generate_emotion_image(self, output_path: str = "emotion_visualization.png"):
         """
-        Generate an image visualization based on the detected emotions throughout the song.
+        Generate an image visualization based on the current chunk's emotion.
         Uses DALL-E to create an artistic representation.
         """
-        if not self.emotions:
-            print("No emotions calculated yet. Please run process_waveform() first.")
+        if not self.energy or not self.tempo or not self.key:
+            print("No chunk data calculated yet.")
             return None
         
-        # Aggregate emotions by averaging percentages
-        emotion_totals = {
+        # Use current chunk's emotion data
+        current_emotion = {
             "happy": 0, "sad": 0, "calm": 0, "energetic": 0,
             "excited": 0, "relaxed": 0, "angry": 0, "romantic": 0, "other": 0
         }
         
-        for emotion_data in self.emotions:
-            emotion_totals["happy"] += emotion_data.happy
-            emotion_totals["sad"] += emotion_data.sad
-            emotion_totals["calm"] += emotion_data.calm
-            emotion_totals["energetic"] += emotion_data.energetic
-            emotion_totals["excited"] += emotion_data.excited
-            emotion_totals["relaxed"] += emotion_data.relaxed
-            emotion_totals["angry"] += emotion_data.angry
-            emotion_totals["romantic"] += emotion_data.romantic
-            emotion_totals["other"] += emotion_data.other
+        if self.emotions:
+            last_emotion = self.emotions[-1]
+            current_emotion = {
+                "happy": last_emotion.happy,
+                "sad": last_emotion.sad,
+                "calm": last_emotion.calm,
+                "energetic": last_emotion.energetic,
+                "excited": last_emotion.excited,
+                "relaxed": last_emotion.relaxed,
+                "angry": last_emotion.angry,
+                "romantic": last_emotion.romantic,
+                "other": last_emotion.other,
+            }
         
-        # Calculate averages
-        num_chunks = len(self.emotions)
-        emotion_averages = {k: v / num_chunks for k, v in emotion_totals.items()}
-        
-        # Get top 3 emotions
-        sorted_emotions = sorted(emotion_averages.items(), key=lambda x: x[1], reverse=True)
+        # Get top 3 emotions for this chunk
+        sorted_emotions = sorted(current_emotion.items(), key=lambda x: x[1], reverse=True)
         dominant_emotions = [f"{e[0].capitalize()} ({e[1]:.1f}%)" for e in sorted_emotions[:3]]
         
         # Create a prompt for DALL-E
         emotions_str = ", ".join(dominant_emotions)
         
-        dalle_prompt = f"""Create an abstract artistic visualization representing the emotional journey of a song. 
+        dalle_prompt = f"""Create an abstract artistic visualization representing this musical moment. 
 The dominant emotions are: {emotions_str}. 
+Tempo: {self.tempo} BPM, Key: {self.key}, Energy: {self.energy:.4f}.
 Use flowing colors, shapes, and patterns that evoke these feelings. 
 Style: abstract, emotional, musical, flowing, vibrant."""
         
