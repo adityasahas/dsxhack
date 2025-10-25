@@ -3,7 +3,6 @@ uvicorn[standard]==0.32.1
 librosa
 sounddevice
 scikit-learn
-torch
 openai
 requests
 pydantic
