@@ -3,24 +3,24 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 import SignOutButton from "../(auth)/components/button-signout";
 import { getMe } from "@/actions/user";
-import AudioUpload from "./audio-upload";
+import AudioVisualizer from "./audio-visualizer";
 import GenerationsList from "./generations-list";
 
 export default async function Home() {
   const me = await getMe();
 
   return (
-    <div className="grid min-h-screen grid-rows-[20px_1fr_20px] items-center justify-items-center gap-16 p-8 pb-20 font-[family-name:var(--font-geist-sans)] sm:p-20">
+    <div className="grid min-h-screen grid-rows-[20px_1fr_20px] items-center justify-items-center gap-8 p-8 pb-20 font-[family-name:var(--font-geist-sans)] sm:p-20">
       {me ? (
-        <main className="row-start-2 flex w-full max-w-4xl flex-col gap-8">
+        <main className="row-start-2 flex w-full max-w-5xl flex-col gap-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-semibold">Audio Visualizer</h1>
-              <p className="text-sm text-muted-foreground">Welcome back, {me.name}</p>
+              <h1 className="text-2xl font-semibold">Audio Visualizer</h1>
+              <p className="text-xs text-muted-foreground">Welcome back, {me.name}</p>
             </div>
             <SignOutButton />
           </div>
-          <AudioUpload />
+          <AudioVisualizer />
           <GenerationsList />
         </main>
       ) : (

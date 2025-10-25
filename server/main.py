@@ -25,59 +25,53 @@ ALLOWED_DOMAIN = "dsxcdn.adi.gg"
 
 class AudioProcessRequest(BaseModel):
     audio_url: str
+    
 async def process_audio_stream(audio_url: str):
-    """Generator function that yields processing updates"""
+    """Generator function that yields processing updates for each chunk"""
     try:
-        # Initial status
         yield json.dumps({"status": "starting", "progress": 0}) + "\n"
-        await asyncio.sleep(0.1)  # Small delay for demo
+        await asyncio.sleep(0.1)
         
-        # Process audio
         p = Process(audio_url)
         
-        # Yield waveform loading status
-        yield json.dumps({"status": "loading_waveform", "progress": 20}) + "\n"
-        wave_result = p.process_waveform()
-        if isinstance(wave_result, str) and "Could not load" in wave_result:
-            yield json.dumps({"status": "error", "message": wave_result}) + "\n"
-            return
+        yield json.dumps({"status": "loading_audio", "progress": 5}) + "\n"
+        await asyncio.sleep(0.1)
         
-        # Yield chunking status
-        yield json.dumps({"status": "chunking", "progress": 40}) + "\n"
-        chunks = p.chunk()
+        # Load audio and calculate full waveform upfront
+        waveform_data = p.load_and_calculate_waveform()
         
-        # Yield energy calculation status
-        yield json.dumps({"status": "calculating_energy", "progress": 60}) + "\n"
-        energy = p.get_energy()
-        yield json.dumps({"status": "energy_complete", "data": {"energy": energy}, "progress": 70}) + "\n"
+        yield json.dumps({
+            "status": "waveform_ready",
+            "progress": 10,
+            "waveform": waveform_data
+        }) + "\n"
+        await asyncio.sleep(0.1)
         
-        # Yield tempo calculation status
-        yield json.dumps({"status": "calculating_tempo", "progress": 80}) + "\n"
-        tempo = p.get_tempo()
-        yield json.dumps({"status": "tempo_complete", "data": {"tempo": tempo}, "progress": 85}) + "\n"
-        
-        # Yield key detection status
-        yield json.dumps({"status": "detecting_key", "progress": 90}) + "\n"
-        key = p.get_key()
-        yield json.dumps({"status": "key_complete", "data": {"key": key}, "progress": 95}) + "\n"
-        
-        # Final emotion calculation
-        yield json.dumps({"status": "calculating_emotion", "progress": 98}) + "\n"
-        emotion = p.calculate_emotion()
-        
-        # Send final result
-        final_result = {
-            "status": "complete",
-            "progress": 100,
-            "data": {
-                "energy": energy,
-                "tempo": tempo,
-                "key": key,
-                "emotion": emotion,
-                "audio_url": audio_url
+        for chunk_result in p.process_waveform():
+            if "error" in chunk_result:
+                yield json.dumps({"status": "error", "message": chunk_result["error"]}) + "\n"
+                return
+            
+            progress = 10 + (chunk_result["chunk_number"] / chunk_result["total_chunks"]) * 90
+            
+            result = {
+                "status": "processing_chunk",
+                "progress": int(progress),
+                "chunk_number": chunk_result["chunk_number"],
+                "total_chunks": chunk_result["total_chunks"],
+                "data": {
+                    "energy": chunk_result["energy"],
+                    "tempo": chunk_result["tempo"],
+                    "key": chunk_result["key"],
+                    "emotion": chunk_result["emotion"],
+                    "image_url": chunk_result["image_url"],
+                    "audio_url": audio_url
+                }
             }
-        }
-        yield json.dumps(final_result) + "\n"
+            yield json.dumps(result) + "\n"
+            await asyncio.sleep(0.1)
+        
+        yield json.dumps({"status": "complete", "progress": 100}) + "\n"
         
     except Exception as e:
         yield json.dumps({"status": "error", "message": str(e)}) + "\n"

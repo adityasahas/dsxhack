@@ -7,7 +7,7 @@ const pythonPath = isWindows
   ? path.join(__dirname, 'venv', 'Scripts', 'python.exe')
   : path.join(__dirname, 'venv', 'bin', 'python');
 
-const child = spawn(pythonPath, ['main.py'], {
+const child = spawn(pythonPath, ['-u', 'main.py'], {
   cwd: __dirname,
   stdio: 'inherit'
 });

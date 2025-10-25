@@ -1,7 +1,11 @@
 fastapi
 uvicorn[standard]==0.32.1
-pydantic==2.10.5
 librosa
 sounddevice
 scikit-learn
-torch
+openai
+requests
+pydantic
+pydantic-settings
+matplotlib
+numpy
